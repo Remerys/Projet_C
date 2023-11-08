@@ -1,0 +1,149 @@
+*****************************************************
+* Indications                                       *
+*****************************************************
+
+0) Préambule
+============
+
+Une architecture logicielle (des fichiers) vous est fournie, vous devez
+la respecter.
+De même un protocole de communication (cf. commentaires dans les fichiers)
+vous est fourni, vous devez le respecter.
+
+Les fichiers utils.h/utils.c vous offrent quelques fonctions d'intérêt
+général. Vous pouvez ajouter les vôtres.
+
+Le script "rmsem.sh" (à adapter) efface les sémaphores et les tubes
+créés par le master. Utile lorsque le master s'arrête anormalement.
+
+Le script "pstree" affiche la hiérarchie des processus à partir du master.
+
+Vous devez vérifier que chaque appel système (fork, pipe, open, write, ...)
+est correct avec la macro "myassert" (cf. myassert.h).
+
+Organisation de votre travail (ce n'est qu'une suggestion) :
+Travaillez par petites étapes et surtout testez les au fur et à mesure. Ecrire
+tout le programme d'un coup et le tester/débuguer ensuite est voué à l'échec.
+Pour ce faire, on travaille avec des bouchons :
+- un bouchon est une fonction qui simule une partie du programme avec un code très simple
+- exemple (d'école) pour utiliser la fonction max sans l'écrire : int max(int a, b) { return 1000; }
+- intérêt : vous testez votre code et s'il plante vous savez que ce n'est pas à cause de max.
+            Et quand votre code marche, vous implémentez la fonction max, et si ça plante alors
+            cela vient forcément de la fonction max.
+Application au projet, voici une manière de débuter :
+- vous programmez le client et le master avec la communication par tubes
+- vous programmez l'envoi des données par le client
+- vous programmez la réception des données par le master
+- à chaque ordre le master renvoie un résultat constant (par exemple toujours 3.14 pour le
+  max, toujour true pour le test d'existence, ...
+- vous programmez la réception du résultat par le client
+- vous faites plein de tests en changeant parfois la réponse du master (remplacer true
+  par false par exemple) pour couvrir toutes les cas possibles
+- normalement (mais faut pas trop rêver) si tout marche bien, vous n'avez plus à toucher
+  au client et vous vous concentrez sur les workers.
+
+
+1) Compilation
+==============
+
+Un Makefile est fourni, voici quelques exemples pour compiler :
+- tout compiler :
+      $ make
+    ou
+      $ make all
+- compiler uniquement le master
+      $ make master
+- compiler uniquement client_master.c
+      $ make client_master.o
+      attention, c'est bien .o : on précise ce qu'on veut obtenir et pas ce qu'on compile
+
+Si vous avez besoin de rajouter des .c à votre projet, il faut modifier le
+Makefile en ajoutant vos noms de fichiers aux lignes définissant SRC1, SRC2 et SRC3.
+Il n'y rien d'autre à faire.
+
+Si vous voulez activer/désactiver le mode "trace", modifiez le fichier config.h
+et recompilez.
+Le mode "trace" consiste à faire des affichages avec les macros TRACE0, ..., TRACE3.
+On peut activer/supprimer les affichages juste en modifiant config.h
+
+
+3) Master
+=========
+
+Le master se lance sans argument dans une console à part :
+$ ./master
+On peut le lancer avec valgrind :
+$ valgrind ./master
+
+C'est donc le master qui lance les workers.
+Note : lancer les workers avec valgrind est plus compliqué
+
+
+4) Client
+=========
+
+Le client doit être lancé dans sa propre console
+
+Pour connaître les arguments possibles, lancez le sans arguments :
+    $ ./client
+    usages : ./client <ordre> [[[<param1>] [<param2>] ...]]
+       $ ./client stop
+              arrêt master
+       $ ./client howmany
+       ...
+     message :
+         Il faut préciser une commande
+
+Un client est lancé pour une commande puis s'arrête.
+Il faut le lancer plusieurs fois si on veut donner plusieurs ordres au master.
+Et si vous voulez tester les conflits de communication avec le master, il faut
+lancer plusieurs clients en même temps dans différentes consoles.
+
+
+5) Tests
+========
+
+Le script test_client.sh lance une série d'appels au client (et donc au
+master et aux workers).
+
+Voici ce que j'obtiens avec ma version :
+$ ./test_client.sh 
+== insertion des 10 valeur(s), interval [95,105[
+insertion des 10 éléments : ok
+insertion de l'élément 100 : ok
+insertion de l'élément 100 : ok
+
+== tests d'existence
+élément 94 : absent
+élément 95 : absent
+élément 96 : présent en 3 exemplaire(s)
+élément 97 : présent en 1 exemplaire(s)
+élément 98 : présent en 1 exemplaire(s)
+élément 99 : absent
+élément 100 : présent en 3 exemplaire(s)
+élément 101 : absent
+élément 102 : absent
+élément 103 : présent en 2 exemplaire(s)
+élément 104 : présent en 2 exemplaire(s)
+élément 105 : absent
+élément 106 : absent
+
+== affichage
+affichage des éléments (cf. console master)
+     note : la fenêtre master a affiché :
+            [96, 3] [97, 1] [98, 1] [100, 3] [103, 2] [104, 2]
+== cardinalité
+Il y a 12 éléments
+Il y a 6 éléments distincts
+== min et mas
+minimum : 96
+maximum : 104
+== somme
+somme des éléments : 1197
+== stop
+Le master s'est arrếté
+
+== calcul multi-thread (nbThreads=3, elt=5, nb=20, intervalle=[0,10[)
+[2 6 2 8 9 5 7 0 8 3 5 3 2 7 8 4 5 9 5 1]
+Elément 5 présent 4 fois (4 attendu)
+
