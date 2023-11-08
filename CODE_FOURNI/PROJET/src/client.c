@@ -16,6 +16,11 @@
 
 #include "client_master.h"
 
+// Include à nous
+#include <assert.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+
 
 /************************************************************************
  * chaines possibles pour le premier paramètre de la ligne de commande
@@ -261,6 +266,22 @@ void receiveAnswer(const Data *data)
 }
 
 
+static void entrerSC(int semId)
+{
+    // TODO
+    struct sembuf operationMoins = {0, -1, 0};
+    int retSemop = semop(semId, &operationMoins, 1);
+    assert(retSemop != -1);
+}
+
+static void sortirSC(int semId)
+{
+    // TODO
+    struct sembuf operationPlus = {0, 1, 0};
+    int retSemop = semop(semId, &operationPlus, 1);
+    assert(retSemop != -1);
+}
+
 /************************************************************************
  * Fonction principale
  ************************************************************************/
@@ -273,10 +294,14 @@ int main(int argc, char * argv[])
         lauchThreads(&data);
     else
     {
+        int semId;
+        // get semaphore
+        semId = my_semget();
         //TODO
         // - entrer en section critique :
         //       . pour empêcher que 2 clients communiquent simultanément
         //       . le mutex est déjà créé par le master
+        entrerSC(semId);
         // - ouvrir les tubes nommés (ils sont déjà créés par le master)
         //       . les ouvertures sont bloquantes, il faut s'assurer que
         //         le master ouvre les tubes dans le même ordre
@@ -287,6 +312,7 @@ int main(int argc, char * argv[])
 
         //TODO
         // - sortir de la section critique
+        sortirSC(semId);
         // - libérer les ressources (fermeture des tubes, ...)
         // - débloquer le master grâce à un second sémaphore (cf. ci-dessous)
         //
