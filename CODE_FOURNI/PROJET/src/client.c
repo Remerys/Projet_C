@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include "bettermyassert.h"
 
 
 /************************************************************************
@@ -271,7 +272,7 @@ static void entrerSC(int semId)
     // TODO
     struct sembuf operationMoins = {0, -1, 0};
     int retSemop = semop(semId, &operationMoins, 1);
-    assert(retSemop != -1);
+    assert_semop(retSemop);
 }
 
 static void sortirSC(int semId)
@@ -279,7 +280,7 @@ static void sortirSC(int semId)
     // TODO
     struct sembuf operationPlus = {0, 1, 0};
     int retSemop = semop(semId, &operationPlus, 1);
-    assert(retSemop != -1);
+    assert_semop(retSemop);
 }
 
 /************************************************************************
