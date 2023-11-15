@@ -16,6 +16,13 @@
 
 #include "client_master.h"
 
+// Include à nous
+#include <assert.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include "bettermyassert.h"
+#include <fcntl.h>
+
 
 /************************************************************************
  * chaines possibles pour le premier paramètre de la ligne de commande
@@ -260,6 +267,56 @@ void receiveAnswer(const Data *data)
     //END TODO
 }
 
+// Récupération du sémaphore
+static int my_semget()
+{
+    key_t key;
+    int semId;
+
+    key = ftok(MY_FILE, PROJ_ID);
+    assert_ftok(key);
+
+    semId = semget(key, 1, 0);
+    assert_semget(semId);
+
+    return semId;
+}
+
+static void enterSC(int semId)
+{
+    struct sembuf operation = {0, -1, 0};
+    int retSemop = semop(semId, &operation, 1);
+    assert_semop(retSemop);
+}
+
+static void exitSC(int semId)
+{
+    struct sembuf operation = {0, 1, 0};
+    int retSemop = semop(semId, &operation, 1);
+    assert_semop(retSemop);
+}
+
+static int myOpen(const char * pipeId, int parameter) {
+    int retOpen;
+
+    retOpen = open(pipeId, parameter);
+    assert_openPipe(retOpen);
+
+    return retOpen;
+}
+
+static void myClose(int pipeId) {
+    int retClose;
+
+    retClose = close(pipeId);
+    assert_closePipe(retClose);
+}
+
+static void enterWaiting(int semaphoreId) {
+    struct sembuf operation = {0, 1, 0};
+    int retSemop = semop(semaphoreId, &operation, 1);
+    assert_semop(retSemop);
+}
 
 /************************************************************************
  * Fonction principale
@@ -273,13 +330,20 @@ int main(int argc, char * argv[])
         lauchThreads(&data);
     else
     {
+        int mainSemaphore, waitSemaphore, pipe_client_to_master, pipe_master_to_client;
+        // get semaphore
+        mainSemaphore = my_semget();
+        waitSemaphore = my_semget();
         //TODO
         // - entrer en section critique :
         //       . pour empêcher que 2 clients communiquent simultanément
         //       . le mutex est déjà créé par le master
+        enterSC(mainSemaphore);
         // - ouvrir les tubes nommés (ils sont déjà créés par le master)
         //       . les ouvertures sont bloquantes, il faut s'assurer que
         //         le master ouvre les tubes dans le même ordre
+        pipe_client_to_master = myOpen("pipe_client_to_master", O_WRONLY);
+        pipe_master_to_client = myOpen("pipe_master_to_client", O_RDONLY);
         //END TODO
 
         sendData(&data);
@@ -287,15 +351,18 @@ int main(int argc, char * argv[])
 
         //TODO
         // - sortir de la section critique
+        exitSC(mainSemaphore);
         // - libérer les ressources (fermeture des tubes, ...)
+        myClose(pipe_client_to_master);
+        myClose(pipe_master_to_client);
         // - débloquer le master grâce à un second sémaphore (cf. ci-dessous)
         //
         // Une fois que le master a envoyé la réponse au client, il se bloque
         // sur un sémaphore ; le dernier point permet donc au master de continuer
-        //
+        enterWaiting(waitSemaphore);
         // N'hésitez pas à faire des fonctions annexes ; si la fonction main
         // ne dépassait pas une trentaine de lignes, ce serait bien.
     }
-    
+
     return EXIT_SUCCESS;
 }

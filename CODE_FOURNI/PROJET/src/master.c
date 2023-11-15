@@ -15,6 +15,15 @@
 #include "client_master.h"
 #include "master_worker.h"
 
+// Include à nous
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include "master.h"
+#include "bettermyassert.h"
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 /************************************************************************
  * Données persistantes d'un master
  ************************************************************************/
@@ -228,7 +237,29 @@ void orderPrint(Data *data)
 /************************************************************************
  * boucle principale de communication avec le client
  ************************************************************************/
-void loop(Data *data)
+static int myOpen(const char * pipeId, int parameter) {
+    int retOpen;
+
+    retOpen = open(pipeId, parameter);
+    assert_openPipe(retOpen);
+
+    return retOpen;
+}
+
+static void myClose(int pipeId) {
+    int retClose;
+
+    retClose = close(pipeId);
+    assert_closePipe(retClose);
+}
+
+static void exitWaiting(int semaphoreId) {
+    struct sembuf operation = {0, -1, 0};
+    int retSemop = semop(semaphoreId, &operation, 1);
+    assert_semop(retSemop);
+}
+
+void loop(Data *data, const char * pipe_client_to_master, const char * pipe_master_to_client, int waitSemaphore)
 {
     bool end = false;
 
@@ -237,6 +268,9 @@ void loop(Data *data)
     while (! end)
     {
         //TODO ouverture des tubes avec le client (cf. explications dans client.c)
+        int pipe_client_to_master_id, pipe_master_to_client_id;
+        pipe_client_to_master_id = myOpen(pipe_client_to_master, O_RDONLY);
+        pipe_master_to_client_id = myOpen(pipe_master_to_client, O_WRONLY);
 
         int order = CM_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du client
         switch(order)
@@ -278,7 +312,10 @@ void loop(Data *data)
         //TODO fermer les tubes nommés
         //     il est important d'ouvrir et fermer les tubes nommés à chaque itération
         //     voyez-vous pourquoi ?
+        myClose(pipe_client_to_master_id);
+        myClose(pipe_master_to_client_id);
         //TODO attendre ordre du client avant de continuer (sémaphore pour une précédence)
+        exitWaiting(waitSemaphore);
 
         TRACE0("[master] fin ordre\n");
     }
@@ -292,6 +329,46 @@ void loop(Data *data)
 //TODO N'hésitez pas à faire des fonctions annexes ; si les fonctions main
 //TODO et loop pouvaient être "courtes", ce serait bien
 
+// Création du sémaphore
+static int my_semget() {
+    key_t key;
+    int semId, retSet;
+
+    key = ftok(MY_FILE, PROJ_ID);
+    assert_ftok(key);
+  
+    semId = semget(key, 1, IPC_CREAT | IPC_EXCL | 0641); // 644 = rw-r----x
+    assert_semget(semId);
+
+    retSet = semctl(semId, 0, SETVAL, 1);
+    assert_semctl(retSet);
+
+    return semId;
+}
+
+static int my_mkfifo(const char * pipeName) {
+  int retMkfifo;
+
+  retMkfifo = mkfifo(pipeName, 0644); // 644 = rw-r--r--
+  assert_mkfifo(retMkfifo);
+
+  return retMkfifo;
+}
+
+// Déstruction du sémaphore
+static void my_destroy_semaphore(int semId) {
+    // TODO
+    int retClose = semctl(semId, -1, IPC_RMID);
+    assert_semctl(retClose);
+}
+
+// Déstruction du tube nommé
+static void my_destroy_pipe(const char * pipeName) {
+    // TODO
+    int retUnlink = unlink(pipeName);
+    assert_unlink(retUnlink);
+}
+
 int main(int argc, char * argv[])
 {
     if (argc != 1)
@@ -300,15 +377,28 @@ int main(int argc, char * argv[])
     TRACE0("[master] début\n");
 
     Data data;
+    int mainSemaphore, waitSemaphore;
+    const char * pipe_client_to_master = "pipe_client_to_master";
+    const char * pipe_master_to_client = "pipe_master_to_client";
 
+    TRACE0("[master] TEST1\n");
     //TODO
     // - création des sémaphores
+    mainSemaphore = my_semget();
+    TRACE0("[master] TEST2\n");
+    waitSemaphore = my_semget();
     // - création des tubes nommés
+    my_mkfifo(pipe_client_to_master);
+    my_mkfifo(pipe_master_to_client);
     //END TODO
 
-    loop(&data);
+    loop(&data, pipe_client_to_master, pipe_master_to_client, waitSemaphore);
 
     //TODO destruction des tubes nommés, des sémaphores, ...
+    my_destroy_semaphore(mainSemaphore);
+    my_destroy_semaphore(waitSemaphore);
+    my_destroy_pipe(pipe_client_to_master);
+    my_destroy_pipe(pipe_master_to_client);
 
     TRACE0("[master] terminaison\n");
     return EXIT_SUCCESS;
