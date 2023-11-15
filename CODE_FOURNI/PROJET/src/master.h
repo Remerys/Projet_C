@@ -1,14 +1,12 @@
 #ifndef MASTER_H
 #define MASTER_H
 
-// Fichier choisi pour l'identification du sémaphore
-#define MY_FILE "master.h"
-
-// Identifiant pour le deuxième paramètre de ftok
-#define PROJ_ID 42 // ?
-
+static int myOpen(const char * pipeId, int parameter);
+static void myClose(int pipeId);
+static void exitWaiting(int semaphoreId);
 static int my_semget();
-static int my_mkfifo();
-static void my_destroy(int semId);
+static int my_mkfifo(const char * pipeName);
+static void my_destroy_semaphore(int semId);
+static void my_destroy_pipe(const char * pipeName);
 
 #endif

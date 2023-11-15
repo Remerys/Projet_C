@@ -31,12 +31,12 @@ void assert_closePipe(int ret) {
 
 //écriture dans un pipe
 void assert_writePipe(int ret, int nbrWrite, size_t size) {
-    myassert(((ret != -1) && (ret == (nbrWrite*size))), "Erreur lors de l'écriture dans le pipe !");
+    myassert(((ret != -1) && (ret == (int)(nbrWrite*size))), "Erreur lors de l'écriture dans le pipe !");
 }
 
 //lecture dans un pipe
 void assert_readPipe(int ret, int nbrRead, size_t size) {
-    myassert(((ret != 0) && (ret == (nbrRead*size))), "Erreur lors de la lecture dans le pipe !");
+    myassert(((ret != 0) && (ret == (int)(nbrRead*size))), "Erreur lors de la lecture dans le pipe !");
 }
 
 //execv
@@ -46,7 +46,7 @@ void assert_execv(int ret) {
 
 //création d'un sémaphore
 void assert_semget(int ret) {
-    myassert((ret != -1), "Erreur lors de la création du sémaphore !");
+    myassert((ret != -1), "Erreur lors de la création/récupération du sémaphore !");
 }
 
 //destruction ou initialisation d'un sémaphore
