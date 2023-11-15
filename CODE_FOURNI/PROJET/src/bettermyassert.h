@@ -11,6 +11,7 @@
 #include "myassert.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 /* Fichier contenant les asserts de vérifications nécessaire au projet */
 

@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 
 #include "utils.h"
-#include "myassert.h"
+#include "bettermyassert.h"
 
 #include "master_worker.h"
 
@@ -21,11 +21,19 @@
 typedef struct
 {
     // données internes (valeur de l'élément, cardinalité)
+    float value;
+    int cardinal;
     // communication avec le père (2 tubes) et avec le master (1 tube en écriture)
+    int pipeFathertoMe;
+    int pipeMetoFather;
+    int pipeToMaster;
     // communication avec le fils gauche s'il existe (2 tubes)
+    int pipeLeftSontoMe;
+    int pipeMetoLeftSon;
     // communication avec le fils droit s'il existe (2 tubes)
+    int pipeRightSontoMe;
+    int pipeMetoRightSon;
     //TODO
-    int dummy;  //TODO à enlever (présent pour éviter le warning)
 } Data;
 
 
@@ -52,14 +60,35 @@ static void parseArgs(int argc, char * argv[], Data *data)
         usage(argv[0], "Nombre d'arguments incorrect");
 
     //TODO initialisation data
-    
+    data->value = strtof(argv[1], NULL);
+    data->cardinal = 1;
+    data->pipeFathertoMe = strtol(argv[2], NULL, 10);
+    data->pipeMetoFather = strtol(argv[3], NULL, 10);
+    data->pipeToMaster = strtol(argv[4], NULL, 10);
+    data->pipeMetoLeftSon = 0;
+    data->pipeLeftSontoMe = 0;
+    data->pipeMetoRightSon = 0;
+    data->pipeRightSontoMe = 0;
+
+
     //TODO (à enlever) comment récupérer les arguments de la ligne de commande
-    float elt = strtof(argv[1], NULL);
+    /*float elt = strtof(argv[1], NULL);
     int fdIn = strtol(argv[2], NULL, 10);
     int fdOut = strtol(argv[3], NULL, 10);
     int fdToMaster = strtol(argv[4], NULL, 10);
-    printf("%g %d %d %d\n", elt, fdIn, fdOut, fdToMaster);
+    printf("%g %d %d %d\n", elt, fdIn, fdOut, fdToMaster);*/
     //END TODO
+}
+
+void creaWorker(float val, int pipeFtoNew, int pipeNewtoF, int pipetoM, Data * data) {
+  data->cardinal = 1;
+  data->value = val;
+  data->pipeFathertoMe = pipeFtoNew;
+  data->pipeMetoFather = pipeNewtoF;
+  data->pipeLeftSontoMe = 0;
+  data->pipeMetoLeftSon = 0;
+  data->pipeMetoRightSon = 0;
+  data->pipeRightSontoMe = 0;
 }
 
 
@@ -190,14 +219,57 @@ static void insertAction(Data *data)
     TRACE3("    [worker (%d, %d) {%g}] : ordre insert\n", getpid(), getppid(), 3.14 /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
+    int response = MW_ANSWER_INSERT;
+
     //TODO
     // - recevoir l'élément à insérer en provenance du père
+    float element;
+    int ret = read(data->pipeFathertoMe, &element, sizeof(float));
+    assert(ret == sizeof(int));
     // - si élément courant == élément à tester
     //       . incrémenter la cardinalité courante
     //       . envoyer au master l'accusé de réception (cf. master_worker.h)
+    if (data->value == element)
+    {
+      data->cardinal += 1;
+      int ret = write(data->pipeToMaster, &response, sizeof(int));
+      assert(ret == sizeof(int));
+    }
     // - sinon si (elt à tester < elt courant) et (pas de fils gauche)
     //       . créer un worker à gauche avec l'élément reçu du client
     //       . note : c'est ce worker qui enverra l'accusé de réception au master
+    else if ((element < data->value) && (data->pipeMetoLeftSon == 0))
+    {
+      int pereToFils[2];
+      int filsToPere[2];
+      int ret;
+      pid_t retFork;
+
+      ret = pipe(pereToFils);
+      assert(ret == 0);
+      ret = pipe(filsToPere);
+      assert(ret == 0);
+
+      retFork = fork();
+      assert(retFork != -1);
+
+      if (retFork == 0)
+      {
+        close(pereToFils[1]);
+        close(filsToPere[0]);
+        creaWorker(element, pereToFils[0], filsToPere[1], data->pipeToMaster, data);
+        
+        int ret = write(data->pipeToMaster, &response, sizeof(int));
+        assert(ret == sizeof(int));
+      }
+      else
+      {
+        close(pereToFils[0]);
+        close(filsToPere[1]);
+        data->pipeLeftSontoMe = filsToPere[0];
+        data->pipeMetoLeftSon = pereToFils[1];
+      }
+    }
     // - sinon si (elt à tester > elt courant) et (pas de fils droit)
     //       . créer un worker à droite avec l'élément reçu du client
     //       . note : c'est ce worker qui enverra l'accusé de réception au master
