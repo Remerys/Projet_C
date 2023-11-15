@@ -19,6 +19,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include "master.h"
+#include "bettermyassert.h"
 
 /************************************************************************
  * Données persistantes d'un master
@@ -303,13 +304,13 @@ static int my_semget() {
     int semId, retSet;
 
     key = ftok(MY_FILE, PROJ_ID);
-    assert(key != -1);
+    assert_ftok(key);
   
     semId = semget(key, 1, IPC_CREAT | IPC_EXCL | 0641);
-    assert(semId != -1);
+    assert_semget(semId);
 
     retSet = semctl(semId, 0, SETVAL, 1);
-    assert(retSet != -1);
+    assert_semctl(retSet);
 
     return semId;
 }
@@ -318,10 +319,10 @@ static int my_mkfifo() {
   int retMkfifo;
 
   retMkfifo = mkfifo("pipe_client_to_master", 0644); // 644 = rw-r--r--
-  assert(retMkfifo == 0);
+  assert_mkfifo(retMkfifo);
 
   retMkfifo = mkfifo("pipe_master_to_client", 0644); // 644 = rw-r--r--
-  assert(retMkfifo == 0);
+  assert_mkfifo(retMkfifo);
 
   return retMkfifo;
 }
@@ -330,7 +331,7 @@ static int my_mkfifo() {
 static void my_destroy(int semId) {
     // TODO
     int retClose = semctl(semId, -1, IPC_RMID);
-    assert(retClose != -1);
+    assert_semctl(retClose);
 }
 
 int main(int argc, char * argv[])
