@@ -15,6 +15,12 @@
 #include "client_master.h"
 #include "master_worker.h"
 
+// Include à nous
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include "master.h"
+#include "bettermyassert.h"
+
 /************************************************************************
  * Données persistantes d'un master
  ************************************************************************/
@@ -292,6 +298,42 @@ void loop(Data *data)
 //TODO N'hésitez pas à faire des fonctions annexes ; si les fonctions main
 //TODO et loop pouvaient être "courtes", ce serait bien
 
+// Création du sémaphore
+static int my_semget() {
+    key_t key;
+    int semId, retSet;
+
+    key = ftok(MY_FILE, PROJ_ID);
+    assert_ftok(key);
+  
+    semId = semget(key, 1, IPC_CREAT | IPC_EXCL | 0641);
+    assert_semget(semId);
+
+    retSet = semctl(semId, 0, SETVAL, 1);
+    assert_semctl(retSet);
+
+    return semId;
+}
+
+static int my_mkfifo() {
+  int retMkfifo;
+
+  retMkfifo = mkfifo("pipe_client_to_master", 0644); // 644 = rw-r--r--
+  assert_mkfifo(retMkfifo);
+
+  retMkfifo = mkfifo("pipe_master_to_client", 0644); // 644 = rw-r--r--
+  assert_mkfifo(retMkfifo);
+
+  return retMkfifo;
+}
+
+// Déstruction du sémaphore
+static void my_destroy(int semId) {
+    // TODO
+    int retClose = semctl(semId, -1, IPC_RMID);
+    assert_semctl(retClose);
+}
+
 int main(int argc, char * argv[])
 {
     if (argc != 1)
@@ -300,15 +342,19 @@ int main(int argc, char * argv[])
     TRACE0("[master] début\n");
 
     Data data;
+    int semId, retMkfifo;
 
     //TODO
     // - création des sémaphores
+    semId = my_semget();
     // - création des tubes nommés
+    retMkfifo = my_mkfifo();
     //END TODO
 
     loop(&data);
 
     //TODO destruction des tubes nommés, des sémaphores, ...
+    my_destroy(semId);
 
     TRACE0("[master] terminaison\n");
     return EXIT_SUCCESS;
