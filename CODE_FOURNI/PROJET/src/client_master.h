@@ -40,7 +40,7 @@
 #define MY_FILE "client_master.h"
 
 // Identifiant pour le deuxième paramètre de ftok
-#define PROJ_ID 42
+#define PROJ_ID 
 
 
 //END TODO

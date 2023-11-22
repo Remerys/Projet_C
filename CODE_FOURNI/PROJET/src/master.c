@@ -66,7 +66,11 @@ void init(Data *data)
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
     //TODO initialisation data
-    data->
+    data->pipe_from_client = -1;
+    data->pipe_to_client = -1;
+    data->pipe_to_worker = 0;
+    data->pipe_from_worker = 0;
+    data->pipe_allWorkers = 0;
 
 }
 
@@ -284,10 +288,14 @@ void loop(Data *data, const char * pipe_client_to_master, const char * pipe_mast
         //rajouter des assert !!
 
 
-        data->pipe_from_client = pipe_client_to_master;
-        data->pipe_to_client = pipe_master_to_client;
+        //data->pipe_from_client = pipe_client_to_master;
+        //data->pipe_to_client = pipe_master_to_client;
 
         int order = CM_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du client
+
+
+
+
         switch(order)
         {
           case CM_ORDER_STOP:
@@ -350,6 +358,7 @@ static int my_semget() {
     int semId, retSet;
 
     key = ftok(MY_FILE, PROJ_ID);
+    printf("%d\n", key);
     assert_ftok(key);
   
     semId = semget(key, 1, IPC_CREAT | IPC_EXCL | 0641); // 644 = rw-r----x
@@ -401,7 +410,7 @@ int main(int argc, char * argv[])
     // - création des sémaphores
     mainSemaphore = my_semget();
     TRACE0("[master] TEST2\n");
-    waitSemaphore = my_semget();    //deux fois même semget ?
+    waitSemaphore = my_semget();    //deux fois même semget ? //semget tableau peut-être faire s[2] avec s[0] = main et s[1] = wait
     // - création des tubes nommés
     my_mkfifo(pipe_client_to_master);
     my_mkfifo(pipe_master_to_client);      //my_mkfifo return in int ??
