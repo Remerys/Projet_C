@@ -30,11 +30,19 @@
 typedef struct
 {
     // communication avec le client
+    int pipe_to_client;
+    int pipe_from_client;
     // données internes
-    // communication avec le premier worker (double tubes)
-    // communication en provenance de tous les workers (un seul tube en lecture)
+
     //TODO
-    int dummy;  //TODO à enlever (présent pour éviter le warning)
+
+
+    // communication avec le premier worker (double tubes)
+    int pipe_to_worker;
+    int pipe_from_worker;
+    // communication en provenance de tous les workers (un seul tube en lecture)
+    int pipe_allWorkers;
+    //TODO
 } Data;
 
 
@@ -58,6 +66,8 @@ void init(Data *data)
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
     //TODO initialisation data
+    data->
+
 }
 
 
@@ -271,6 +281,11 @@ void loop(Data *data, const char * pipe_client_to_master, const char * pipe_mast
         int pipe_client_to_master_id, pipe_master_to_client_id;
         pipe_client_to_master_id = myOpen(pipe_client_to_master, O_RDONLY);
         pipe_master_to_client_id = myOpen(pipe_master_to_client, O_WRONLY);
+        //rajouter des assert !!
+
+
+        data->pipe_from_client = pipe_client_to_master;
+        data->pipe_to_client = pipe_master_to_client;
 
         int order = CM_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du client
         switch(order)
@@ -386,10 +401,10 @@ int main(int argc, char * argv[])
     // - création des sémaphores
     mainSemaphore = my_semget();
     TRACE0("[master] TEST2\n");
-    waitSemaphore = my_semget();
+    waitSemaphore = my_semget();    //deux fois même semget ?
     // - création des tubes nommés
     my_mkfifo(pipe_client_to_master);
-    my_mkfifo(pipe_master_to_client);
+    my_mkfifo(pipe_master_to_client);      //my_mkfifo return in int ??
     //END TODO
 
     loop(&data, pipe_client_to_master, pipe_master_to_client, waitSemaphore);
