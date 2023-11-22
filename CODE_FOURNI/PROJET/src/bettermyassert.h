@@ -20,6 +20,9 @@
 //création d'un pipe
 void assert_mkfifo(int ret);
 
+//création d'un pipe anonyme
+void assert_pipePipe(int ret);
+
 //destruction d'un pipe
 void assert_unlink(int ret);
 
@@ -29,11 +32,17 @@ void assert_openPipe(int fd);
 //fermeture d'un pipe
 void assert_closePipe(int ret);
 
-//écriture dans un pipe
-void assert_writePipe(int ret, int nbrWrite, size_t size);
+//écriture dans un pipe nommé
+void assert_writePipeNomme(int ret, int nbrWrite, size_t size);
 
-//lecture dans un pipe
-void assert_readPipe(int ret, int nbrRead, size_t size);
+//lecture dans un pipe nommé
+void assert_readPipeNomme(int ret, int nbrRead, size_t size);
+
+//écriture dans un pipe anonyme
+void assert_writePipeAnonymous(int ret, size_t size);
+
+//lecture dans un pipe anonyme
+void assert_readPipeAnonymous(int ret, size_t size);
 
 //execv
 void assert_execv(int ret);

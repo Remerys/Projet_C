@@ -11,6 +11,8 @@
 
 #include "utils.h"
 #include "bettermyassert.h"
+#include "myassert.h"
+#include <assert.h>
 
 #include "master_worker.h"
 
@@ -89,6 +91,7 @@ void creaWorker(float val, int pipeFtoNew, int pipeNewtoF, int pipetoM, Data * d
   data->pipeMetoLeftSon = 0;
   data->pipeMetoRightSon = 0;
   data->pipeRightSontoMe = 0;
+  data->pipeToMaster = pipetoM;
 }
 
 
@@ -97,7 +100,7 @@ void creaWorker(float val, int pipeFtoNew, int pipeNewtoF, int pipetoM, Data * d
  ************************************************************************/
 void stopAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre stop\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre stop\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
     //TODO
@@ -114,8 +117,19 @@ void stopAction(Data *data)
  ************************************************************************/
 static void howManyAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre how many\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre how many\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+  int ret;
+  int filsG;
+  int filsG_dist;
+  int filsD;
+  int filsD_dist;
+  int howmany;
+  int howmany_dist;
+
+  int order = MW_ORDER_HOW_MANY;
+  int answer = MW_ANSWER_HOW_MANY;
 
     //TODO
     // - traiter les cas où les fils n'existent pas
@@ -123,8 +137,57 @@ static void howManyAction(Data *data)
     //       . envoyer ordre howmany (cf. master_worker.h)
     //       . recevoir accusé de réception (cf. master_worker.h)
     //       . recevoir deux résultats (nb elts, nb elts distincts) venant du fils
+    if (data->pipeMetoLeftSon == 0)
+    {
+      filsG = 0;
+      filsG_dist = 0;
+    }
+    else
+    {
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeLeftSontoMe, &answer, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+      assert(answer == MW_ANSWER_HOW_MANY);
+
+      ret = read(data->pipeLeftSontoMe, &filsG, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeLeftSontoMe, &filsG_dist, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+    }
+    if (data->pipeMetoRightSon == 0)
+    {
+      filsD = 0;
+      filsD_dist;
+    }
+    else
+    {
+      ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeRightSontoMe, &answer, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+      assert(answer == MW_ANSWER_HOW_MANY);
+
+      ret = read(data->pipeRightSontoMe, &filsD, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeRightSontoMe, &filsD_dist, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+    }
     // - envoyer l'accusé de réception au père (cf. master_worker.h)
+    ret = write(data->pipeMetoFather, &answer, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
     // - envoyer les résultats (les cumuls des deux quantités + la valeur locale) au père
+    howmany = data->cardinal + filsD + filsG;
+    ret = write(data->pipeMetoFather, &howmany, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
+
+    howmany_dist = 1 + filsD_dist + filsG_dist;
+    ret = write(data->pipeMetoFather, &howmany_dist, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
     //END TODO
 }
 
@@ -134,16 +197,33 @@ static void howManyAction(Data *data)
  ************************************************************************/
 static void minimumAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre minimum\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre minimum\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+    int answer = MW_ANSWER_MINIMUM;
+    int order = MW_ORDER_MINIMUM;
+    int ret;
+    int mini = data->value;
 
     //TODO
     // - si le fils gauche n'existe pas (on est sur le minimum)
     //       . envoyer l'accusé de réception au master (cf. master_worker.h)
     //       . envoyer l'élément du worker courant au master
+    if (data->pipeMetoLeftSon == 0)
+    {
+      ret = write(data->pipeToMaster, &answer, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+      ret = write(data->pipeToMaster, &mini, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
+    }
     // - sinon
     //       . envoyer au worker gauche ordre minimum (cf. master_worker.h)
     //       . note : c'est un des descendants qui enverra le résultat au master
+    else
+    {
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     //END TODO
 }
 
@@ -153,11 +233,28 @@ static void minimumAction(Data *data)
  ************************************************************************/
 static void maximumAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre maximum\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre maximum\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+    int answer = MW_ANSWER_MAXIMUM;
+    int order = MW_ORDER_MAXIMUM;
+    int ret;
+    int maxi = data->value;
 
     //TODO
     // cf. explications pour le minimum
+    if (data->pipeMetoRightSon == 0)
+    {
+      ret = write(data->pipeToMaster, &answer, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+      ret = write(data->pipeToMaster, &maxi, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
+    }
+    else
+    {
+      ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     //END TODO
 }
 
@@ -167,26 +264,66 @@ static void maximumAction(Data *data)
  ************************************************************************/
 static void existAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre exist\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre exist\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+    int order = MW_ORDER_EXIST;
+    int answer_yes = MW_ANSWER_EXIST_YES;
+    int answer_no = MW_ANSWER_EXIST_NO;
+
+    int card = data->cardinal;
 
     //TODO
     // - recevoir l'élément à tester en provenance du père
+    int element;
+    int ret = read(data->pipeFathertoMe, &element, sizeof(float));
+    assert_readPipeAnonymous(ret, sizeof(float));
     // - si élément courant == élément à tester
     //       . envoyer au master l'accusé de réception de réussite (cf. master_worker.h)
     //       . envoyer cardinalité de l'élément courant au master
+    if (data->value == element)
+    {
+      ret = write(data->pipeToMaster, &answer_yes, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+      ret = write(data->pipeToMaster, &card, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     // - sinon si (elt à tester < elt courant) et (pas de fils gauche)
     //       . envoyer au master l'accusé de réception d'échec (cf. master_worker.h)
+    else if (element < data->value && data->pipeMetoLeftSon == 0)
+    {
+      ret = write(data->pipeToMaster, &answer_no, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     // - sinon si (elt à tester > elt courant) et (pas de fils droit)
     //       . envoyer au master l'accusé de réception d'échec (cf. master_worker.h)
+    else if (element > data->value && data->pipeMetoRightSon == 0)
+    {
+      ret = write(data->pipeToMaster, &answer_no, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     // - sinon si (elt à tester < elt courant)
     //       . envoyer au worker gauche ordre exist (cf. master_worker.h)
     //       . envoyer au worker gauche élément à tester
     //       . note : c'est un des descendants qui enverra le résultat au master
+    else if (element < data->value)
+    {
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+      ret = write(data->pipeMetoLeftSon, &element, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
+    }
     // - sinon (donc elt à tester > elt courant)
     //       . envoyer au worker droit ordre exist (cf. master_worker.h)
     //       . envoyer au worker droit élément à tester
     //       . note : c'est un des descendants qui enverra le résultat au master
+    else
+    {
+      ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+      ret = write(data->pipeMetoRightSon, &element, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
+    }
     //END TODO
 }
 
@@ -196,8 +333,16 @@ static void existAction(Data *data)
  ************************************************************************/
 static void sumAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre sum\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre sum\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+    int ret;
+    float sum;
+    float filsG;
+    float filsD;
+
+    int order = MW_ORDER_SUM;
+    int answer = MW_ANSWER_SUM;
 
     //TODO
     // - traiter les cas où les fils n'existent pas
@@ -205,8 +350,45 @@ static void sumAction(Data *data)
     //       . envoyer ordre sum (cf. master_worker.h)
     //       . recevoir accusé de réception (cf. master_worker.h)
     //       . recevoir résultat (somme du fils) venant du fils
+    if (data->pipeMetoLeftSon == 0)
+    {
+      float filsG = 0;
+    }
+    else
+    {
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeLeftSontoMe, &answer, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+      assert(answer == MW_ANSWER_SUM);
+
+      ret = read(data->pipeLeftSontoMe, &filsG, sizeof(float));
+      assert_readPipeAnonymous(ret, sizeof(float));
+    }
+    if (data->pipeMetoRightSon == 0)
+    {
+      float filsD = 0;
+    }
+    else
+    {
+      ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeRightSontoMe, &answer, sizeof(int));
+      assert_readPipeAnonymous(ret, sizeof(int));
+      assert(answer == MW_ANSWER_SUM);
+
+      ret = read(data->pipeRightSontoMe, &filsD, sizeof(float));
+      assert_readPipeAnonymous(ret, sizeof(float));
+    }
     // - envoyer l'accusé de réception au père (cf. master_worker.h)
+    ret = write(data->pipeMetoFather, &answer, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
     // - envoyer le résultat (le cumul des deux quantités + la valeur locale) au père
+    sum = data->value + filsD + filsG;
+    ret = write(data->pipeMetoFather, &sum, sizeof(float));
+    assert_writePipeAnonymous(ret, sizeof(float));
     //END TODO
 }
 
@@ -216,16 +398,17 @@ static void sumAction(Data *data)
  ************************************************************************/
 static void insertAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre insert\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre insert\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
     int response = MW_ANSWER_INSERT;
+    int order = MW_ORDER_INSERT;
 
     //TODO
     // - recevoir l'élément à insérer en provenance du père
     float element;
     int ret = read(data->pipeFathertoMe, &element, sizeof(float));
-    assert(ret == sizeof(int));
+    assert_readPipeAnonymous(ret, sizeof(float));
     // - si élément courant == élément à tester
     //       . incrémenter la cardinalité courante
     //       . envoyer au master l'accusé de réception (cf. master_worker.h)
@@ -233,7 +416,7 @@ static void insertAction(Data *data)
     {
       data->cardinal += 1;
       int ret = write(data->pipeToMaster, &response, sizeof(int));
-      assert(ret == sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
     }
     // - sinon si (elt à tester < elt courant) et (pas de fils gauche)
     //       . créer un worker à gauche avec l'élément reçu du client
@@ -246,26 +429,31 @@ static void insertAction(Data *data)
       pid_t retFork;
 
       ret = pipe(pereToFils);
-      assert(ret == 0);
+      assert_pipePipe(ret);
       ret = pipe(filsToPere);
-      assert(ret == 0);
+      assert_pipePipe(ret);
 
       retFork = fork();
-      assert(retFork != -1);
+      assert_ftok(retFork);
 
       if (retFork == 0)
       {
-        close(pereToFils[1]);
-        close(filsToPere[0]);
+        ret = close(pereToFils[1]);
+        assert_closePipe(ret);
+        ret = close(filsToPere[0]);
+        assert_closePipe(ret);
         creaWorker(element, pereToFils[0], filsToPere[1], data->pipeToMaster, data);
         
-        int ret = write(data->pipeToMaster, &response, sizeof(int));
-        assert(ret == sizeof(int));
+        ret = write(data->pipeToMaster, &response, sizeof(int));
+        assert_writePipeAnonymous(ret, sizeof(int));
       }
       else
       {
-        close(pereToFils[0]);
-        close(filsToPere[1]);
+        ret = close(pereToFils[0]);
+        assert_closePipe(ret);
+        ret = close(filsToPere[1]);
+        assert_closePipe(ret);
+
         data->pipeLeftSontoMe = filsToPere[0];
         data->pipeMetoLeftSon = pereToFils[1];
       }
@@ -273,14 +461,63 @@ static void insertAction(Data *data)
     // - sinon si (elt à tester > elt courant) et (pas de fils droit)
     //       . créer un worker à droite avec l'élément reçu du client
     //       . note : c'est ce worker qui enverra l'accusé de réception au master
+    else if ((element > data->value) && (data->pipeMetoRightSon == 0))
+    {
+      int pereToFils[2];
+      int filsToPere[2];
+      int ret;
+      pid_t retFork;
+
+      ret = pipe(pereToFils);
+      assert_pipePipe(ret);
+      ret = pipe(filsToPere);
+      assert_pipePipe(ret);
+
+      retFork = fork();
+      assert_ftok(retFork);
+
+      if (retFork == 0)
+      {
+        ret = close(pereToFils[1]);
+        assert_closePipe(ret);
+        ret = close(filsToPere[0]);
+        assert_closePipe(ret);
+        creaWorker(element, pereToFils[0], filsToPere[1], data->pipeToMaster, data);
+        
+        ret = write(data->pipeToMaster, &response, sizeof(int));
+        assert_writePipeAnonymous(ret, sizeof(int));
+      }
+      else
+      {
+        ret = close(pereToFils[0]);
+        assert_closePipe(ret);
+        ret = close(filsToPere[1]);
+        assert_closePipe(ret);
+        
+        data->pipeRightSontoMe = filsToPere[0];
+        data->pipeMetoRightSon = pereToFils[1];
+      }
+    }
     // - sinon si (elt à insérer < elt courant)
     //       . envoyer au worker gauche ordre insert (cf. master_worker.h)
     //       . envoyer au worker gauche élément à insérer
     //       . note : c'est un des descendants qui enverra l'accusé de réception au master
+    else if (element < data->value)
+    {
+      int ret;
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     // - sinon (donc elt à insérer > elt courant)
     //       . envoyer au worker droit ordre insert (cf. master_worker.h)
     //       . envoyer au worker droit élément à insérer
     //       . note : c'est un des descendants qui enverra l'accusé de réception au master
+    else
+    {
+      int ret;
+      ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+    }
     //END TODO
 }
 
@@ -290,18 +527,42 @@ static void insertAction(Data *data)
  ************************************************************************/
 static void printAction(Data *data)
 {
-    TRACE3("    [worker (%d, %d) {%g}] : ordre print\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : ordre print\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
+
+    int ret;
+
+    int order = MW_ORDER_PRINT;
+    int accuse_reception = MW_ANSWER_PRINT;
 
     //TODO
     // - si le fils gauche existe
     //       . envoyer ordre print (cf. master_worker.h)
     //       . recevoir accusé de réception (cf. master_worker.h)
+    if (data->pipeMetoLeftSon != 0) {
+      ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = read(data->pipeLeftSontoMe, &accuse_reception, sizeof(float));
+      assert_readPipeAnonymous(ret, sizeof(float));
+      assert(accuse_reception == MW_ANSWER_PRINT);
+    }
     // - afficher l'élément courant avec sa cardinalité
+    printf("(%f, %d)", data->value, data->cardinal);
     // - si le fils droit existe
     //       . envoyer ordre print (cf. master_worker.h)
     //       . recevoir accusé de réception (cf. master_worker.h)
+    if (data->pipeMetoLeftSon != 0) {
+        ret = write(data->pipeMetoRightSon, &order, sizeof(int));
+        assert_writePipeAnonymous(ret, sizeof(int));
+
+        ret = read(data->pipeRightSontoMe, &accuse_reception, sizeof(float));
+        assert_readPipeAnonymous(ret, sizeof(float));
+        assert(accuse_reception == MW_ANSWER_PRINT);
+    }
     // - envoyer l'accusé de réception au père (cf. master_worker.h)
+    ret = write(data->pipeMetoFather, &accuse_reception, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
     //END TODO
 }
 
@@ -315,7 +576,10 @@ void loop(Data *data)
 
     while (! end)
     {
-        int order = MW_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du père
+        //int order = MW_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du père
+        int order;
+        int ret = read(data->pipeFathertoMe, &order, sizeof(int));
+        assert_readPipeAnonymous(ret, sizeof(int));
         switch(order)
         {
           case MW_ORDER_STOP:
@@ -349,7 +613,7 @@ void loop(Data *data)
             break;
         }
 
-        TRACE3("    [worker (%d, %d) {%g}] : fin ordre\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+        TRACE3("    [worker (%d, %d) {%g}] : fin ordre\n", getpid(), getppid(), data->value /*TODO élément*/);
     }
 }
 
@@ -362,15 +626,32 @@ int main(int argc, char * argv[])
 {
     Data data;
     parseArgs(argc, argv, &data);
-    TRACE3("    [worker (%d, %d) {%g}] : début worker\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : début worker\n", getpid(), getppid(), data.value /*TODO élément*/);
 
     //TODO envoyer au master l'accusé de réception d'insertion (cf. master_worker.h)
     //TODO note : en effet si je suis créé c'est qu'on vient d'insérer un élément : moi
+    int answer = MW_ANSWER_INSERT;
+    int ret = write(data.pipeToMaster, &answer, sizeof(int));
+    assert_writePipeAnonymous(ret, sizeof(int));
 
     loop(&data);
 
     //TODO fermer les tubes
+    if (data.pipeMetoLeftSon != 0)
+    {
+      ret = close(data.pipeMetoLeftSon);
+      assert_closePipe(ret);
+      ret = close(data.pipeLeftSontoMe);
+      assert_closePipe(ret);
+    }
+    if (data.pipeMetoRightSon != 0)
+    {
+      ret = close(data.pipeMetoRightSon);
+      assert_closePipe(ret);
+      ret = close(data.pipeRightSontoMe);
+      assert_closePipe(ret);
+    }
 
-    TRACE3("    [worker (%d, %d) {%g}] : fin worker\n", getpid(), getppid(), 3.14 /*TODO élément*/);
+    TRACE3("    [worker (%d, %d) {%g}] : fin worker\n", getpid(), getppid(), data.value /*TODO élément*/);
     return EXIT_SUCCESS;
 }

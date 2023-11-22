@@ -14,6 +14,11 @@ void assert_mkfifo(int ret) {
     myassert((ret == 0), "Erreur lors de la création du pipe !");
 }
 
+//création d'un pipe anonyme
+void assert_pipePipe(int ret) {
+    myassert((ret == 0), "Erreur lors de la création du pipe anonyme !");
+}
+
 //destruction d'un pipe
 void assert_unlink(int ret) {
     myassert((ret == 0), "Erreur lors de la destruction du pipe !");
@@ -26,17 +31,27 @@ void assert_openPipe(int fd) {
 
 //fermeture d'un pipe
 void assert_closePipe(int ret) {
-    myassert((ret == 0), "Erreur lors de la fermeture du pipe !");
+    myassert((ret != -1), "Erreur lors de la fermeture du pipe !");
 }
 
-//écriture dans un pipe
-void assert_writePipe(int ret, int nbrWrite, size_t size) {
-    myassert(((ret != -1) && (ret == (int)(nbrWrite*size))), "Erreur lors de l'écriture dans le pipe !");
+//écriture dans un pipe nommé
+void assert_writePipeNomme(int ret, int nbrWrite, size_t size) {
+    myassert(((ret != -1) && (ret == (int)(nbrWrite*size))), "Erreur lors de l'écriture dans le pipe nommé !");
 }
 
-//lecture dans un pipe
-void assert_readPipe(int ret, int nbrRead, size_t size) {
-    myassert(((ret != 0) && (ret == (int)(nbrRead*size))), "Erreur lors de la lecture dans le pipe !");
+//lecture dans un pipe nommé
+void assert_readPipeNomme(int ret, int nbrRead, size_t size) {
+    myassert(((ret != 0) && (ret == (int)(nbrRead*size))), "Erreur lors de la lecture dans le pipe nommé !");
+}
+
+//écriture dans un pipe anonyme
+void assert_writePipeAnonymous(int ret, size_t size) {
+    myassert(((ret != -1) && (ret == (int)(size))), "Erreur lors de l'écriture dans le pipe anonyme !");
+}
+
+//lecture dans un pipe anonyme
+void assert_readPipeAnonymous(int ret, size_t size) {
+    myassert(((ret != 0) && (ret == (int)(size))), "Erreur lors de la lecture dans le pipe anonyme !");
 }
 
 //execv
@@ -62,4 +77,9 @@ void assert_semop(int ret) {
 //génération de clés uniques
 void assert_ftok(int cle) {
     myassert((cle != -1), "Erreur lors de la génération de la clé !");
+}
+
+//création d'un nouveau processus avec fork
+void assert_fork(int ret) {
+    myassert((ret != -1), "Erreur lors de la création d'un nouveau processus avec fork !");
 }
