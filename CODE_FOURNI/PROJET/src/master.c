@@ -409,7 +409,7 @@ int main(int argc, char * argv[])
     // - création des sémaphores
     mainSemaphore = my_semget(PROJ_ID1);
     TRACE0("[master] TEST2\n");
-    waitSemaphore = my_semget();
+    waitSemaphore = my_semget(PROJ_ID2);
     // - création des tubes nommés
     my_mkfifo(pipe_client_to_master);
     my_mkfifo(pipe_master_to_client);      //my_mkfifo return in int ??
