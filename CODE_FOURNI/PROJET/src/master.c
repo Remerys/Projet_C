@@ -353,12 +353,11 @@ void loop(Data *data, const char * pipe_client_to_master, const char * pipe_mast
 //TODO et loop pouvaient être "courtes", ce serait bien
 
 // Création du sémaphore
-static int my_semget() {
+static int my_semget(int keyNumber) {
     key_t key;
     int semId, retSet;
 
-    key = ftok(MY_FILE, PROJ_ID);
-    printf("%d\n", key);
+    key = ftok(MY_FILE, keyNumber);
     assert_ftok(key);
   
     semId = semget(key, 1, IPC_CREAT | IPC_EXCL | 0641); // 644 = rw-r----x
@@ -408,9 +407,9 @@ int main(int argc, char * argv[])
     TRACE0("[master] TEST1\n");
     //TODO
     // - création des sémaphores
-    mainSemaphore = my_semget();
+    mainSemaphore = my_semget(PROJ_ID1);
     TRACE0("[master] TEST2\n");
-    waitSemaphore = my_semget();    //deux fois même semget ? //semget tableau peut-être faire s[2] avec s[0] = main et s[1] = wait
+    waitSemaphore = my_semget();
     // - création des tubes nommés
     my_mkfifo(pipe_client_to_master);
     my_mkfifo(pipe_master_to_client);      //my_mkfifo return in int ??

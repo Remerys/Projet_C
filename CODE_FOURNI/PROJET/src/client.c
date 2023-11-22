@@ -268,12 +268,12 @@ void receiveAnswer(const Data *data)
 }
 
 // Récupération du sémaphore
-static int my_semget()
+static int my_semget(int keyNumber)
 {
     key_t key;
     int semId;
 
-    key = ftok(MY_FILE, PROJ_ID);
+    key = ftok(MY_FILE, keyNumber);
     assert_ftok(key);
 
     semId = semget(key, 1, 0);
@@ -332,8 +332,8 @@ int main(int argc, char * argv[])
     {
         int mainSemaphore, waitSemaphore, pipe_client_to_master, pipe_master_to_client;
         // get semaphore
-        mainSemaphore = my_semget();
-        waitSemaphore = my_semget();
+        mainSemaphore = my_semget(PROJ_ID1);
+        waitSemaphore = my_semget(PROJ_ID2);
         //TODO
         // - entrer en section critique :
         //       . pour empêcher que 2 clients communiquent simultanément
