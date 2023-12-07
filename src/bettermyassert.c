@@ -6,6 +6,7 @@
 //Bibliothèque
 
 #include "bettermyassert.h"
+#include <fcntl.h>
 
 /* TUBES, FORK, EXEC */
 
@@ -80,6 +81,6 @@ void assert_ftok(int cle) {
 }
 
 //création d'un nouveau processus avec fork
-void assert_fork(int ret) {
+void assert_fork(pid_t ret) {
     myassert((ret != -1), "Erreur lors de la création d'un nouveau processus avec fork !");
 }

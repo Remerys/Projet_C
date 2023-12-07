@@ -103,11 +103,26 @@ void stopAction(Data *data)
     TRACE3("    [worker (%d, %d) {%g}] : ordre stop\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
+    int retWrite;
+    int order = MW_ORDER_STOP;
+
     //TODO
     // - traiter les cas où les fils n'existent pas
+    if (data->pipeLeftSontoMe != 0) {
     // - envoyer au worker gauche ordre de fin (cf. master_worker.h)
-    // - envoyer au worker droit ordre de fin (cf. master_worker.h)
+      retWrite = write(data->pipeMetoLeftSon, &order, sizeof(int));
+      assert_writePipeAnonymous(retWrite, sizeof(int));
     // - attendre la fin des deux fils
+      wait(NULL);
+    }
+    if (data->pipeRightSontoMe != 0) {
+    // - envoyer au worker droit ordre de fin (cf. master_worker.h)
+      retWrite = write(data->pipeMetoRightSon, &order, sizeof(int));
+      assert_writePipeAnonymous(retWrite, sizeof(int));
+    // - attendre la fin des deux fils
+      wait(NULL);
+    }
+    
     //END TODO
 }
 
@@ -120,13 +135,13 @@ static void howManyAction(Data *data)
     TRACE3("    [worker (%d, %d) {%g}] : ordre how many\n", getpid(), getppid(), data->value /*TODO élément*/);
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
-  int ret;
-  int filsG;
-  int filsG_dist;
-  int filsD;
-  int filsD_dist;
-  int howmany;
-  int howmany_dist;
+  int ret = 0;
+  int filsG = 0;
+  int filsG_dist = 0;
+  int filsD = 0;
+  int filsD_dist = 0;
+  int howmany = 0;
+  int howmany_dist = 0;
 
   int order = MW_ORDER_HOW_MANY;
   int answer = MW_ANSWER_HOW_MANY;
@@ -160,7 +175,7 @@ static void howManyAction(Data *data)
     if (data->pipeMetoRightSon == 0)
     {
       filsD = 0;
-      filsD_dist;
+      filsD_dist = 0;
     }
     else
     {
@@ -203,7 +218,7 @@ static void minimumAction(Data *data)
     int answer = MW_ANSWER_MINIMUM;
     int order = MW_ORDER_MINIMUM;
     int ret;
-    int mini = data->value;
+    float mini = data->value;
 
     //TODO
     // - si le fils gauche n'existe pas (on est sur le minimum)
@@ -239,7 +254,7 @@ static void maximumAction(Data *data)
     int answer = MW_ANSWER_MAXIMUM;
     int order = MW_ORDER_MAXIMUM;
     int ret;
-    int maxi = data->value;
+    float maxi = data->value;
 
     //TODO
     // cf. explications pour le minimum
@@ -275,7 +290,7 @@ static void existAction(Data *data)
 
     //TODO
     // - recevoir l'élément à tester en provenance du père
-    int element;
+    float element;
     int ret = read(data->pipeFathertoMe, &element, sizeof(float));
     assert_readPipeAnonymous(ret, sizeof(float));
     // - si élément courant == élément à tester
@@ -283,6 +298,7 @@ static void existAction(Data *data)
     //       . envoyer cardinalité de l'élément courant au master
     if (data->value == element)
     {
+
       ret = write(data->pipeToMaster, &answer_yes, sizeof(int));
       assert_writePipeAnonymous(ret, sizeof(int));
       ret = write(data->pipeToMaster, &card, sizeof(int));
@@ -337,9 +353,9 @@ static void sumAction(Data *data)
     myassert(data != NULL, "il faut l'environnement d'exécution");
 
     int ret;
-    float sum;
-    float filsG;
-    float filsD;
+    float sum = 0;
+    float filsG = 0;
+    float filsD = 0;
 
     int order = MW_ORDER_SUM;
     int answer = MW_ANSWER_SUM;
@@ -352,7 +368,7 @@ static void sumAction(Data *data)
     //       . recevoir résultat (somme du fils) venant du fils
     if (data->pipeMetoLeftSon == 0)
     {
-      float filsG = 0;
+      filsG = 0;
     }
     else
     {
@@ -368,7 +384,7 @@ static void sumAction(Data *data)
     }
     if (data->pipeMetoRightSon == 0)
     {
-      float filsD = 0;
+      filsD = 0;
     }
     else
     {
@@ -507,6 +523,9 @@ static void insertAction(Data *data)
       int ret;
       ret = write(data->pipeMetoLeftSon, &order, sizeof(int));
       assert_writePipeAnonymous(ret, sizeof(int));
+      
+      ret = write(data->pipeMetoLeftSon, &element, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
     }
     // - sinon (donc elt à insérer > elt courant)
     //       . envoyer au worker droit ordre insert (cf. master_worker.h)
@@ -517,6 +536,9 @@ static void insertAction(Data *data)
       int ret;
       ret = write(data->pipeMetoRightSon, &order, sizeof(int));
       assert_writePipeAnonymous(ret, sizeof(int));
+
+      ret = write(data->pipeMetoRightSon, &element, sizeof(float));
+      assert_writePipeAnonymous(ret, sizeof(float));
     }
     //END TODO
 }
@@ -548,11 +570,11 @@ static void printAction(Data *data)
       assert(accuse_reception == MW_ANSWER_PRINT);
     }
     // - afficher l'élément courant avec sa cardinalité
-    printf("(%f, %d)", data->value, data->cardinal);
+    printf("(%f, %d)\n", data->value, data->cardinal);
     // - si le fils droit existe
     //       . envoyer ordre print (cf. master_worker.h)
     //       . recevoir accusé de réception (cf. master_worker.h)
-    if (data->pipeMetoLeftSon != 0) {
+    if (data->pipeMetoRightSon != 0) {
         ret = write(data->pipeMetoRightSon, &order, sizeof(int));
         assert_writePipeAnonymous(ret, sizeof(int));
 
@@ -574,7 +596,7 @@ void loop(Data *data)
 {
     bool end = false;
 
-    while (! end)
+    while (!end)
     {
         //int order = MW_ORDER_STOP;   //TODO pour que ça ne boucle pas, mais recevoir l'ordre du père
         int order;
@@ -617,6 +639,113 @@ void loop(Data *data)
     }
 }
 
+
+/************************************************************************
+ * Fonctions auxiliaires
+ ************************************************************************/
+
+/* which permet de savoir quelle info utiliser (si on veut un int ou un float)
+    - true : info1 int
+    - false : info2 float */
+
+void sendInfoToFather(Data *data, int * info1, float * info2, bool which)
+{
+  int retWrite;
+  if (which)
+  {
+    retWrite = write(data->pipeMetoFather, info1, sizeof(int));
+    assert_writePipeAnonymous(retWrite, sizeof(int));
+  }
+  else
+  {
+    retWrite = write(data->pipeMetoFather, info2, sizeof(float));
+    assert_writePipeAnonymous(retWrite, sizeof(float));
+  }
+}
+
+void sendInfoToMaster(Data *data, int * info1, float * info2, bool which) {
+  int retWrite;
+  if (which)
+  {
+    retWrite = write(data->pipeToMaster, info1, sizeof(int));
+    assert_writePipeAnonymous(retWrite, sizeof(int));
+  }
+  else if (info2 != NULL)
+  {
+    retWrite = write(data->pipeToMaster, info2, sizeof(float));
+    assert_writePipeAnonymous(retWrite, sizeof(float));
+  }
+}
+
+void sendInfoToLeftSon(Data *data, int * info1, float * info2, bool which) {
+  int retWrite;
+  if (which)
+  {
+    retWrite = write(data->pipeMetoLeftSon, info1, sizeof(int));
+    assert_writePipeAnonymous(retWrite, sizeof(int));
+  }
+  else if (info2 != NULL)
+  {
+    retWrite = write(data->pipeMetoLeftSon, info2, sizeof(float));
+    assert_writePipeAnonymous(retWrite, sizeof(float));
+  }
+}
+
+void sendInfoToRightSon(Data *data, int * info1, float * info2, bool which) {
+  int retWrite;
+  if (which)
+  {
+    retWrite = write(data->pipeMetoRightSon, info1, sizeof(int));
+    assert_writePipeAnonymous(retWrite, sizeof(int));
+  }
+  else if (info2 != NULL)
+  {
+    retWrite = write(data->pipeMetoRightSon, info2, sizeof(float));
+    assert_writePipeAnonymous(retWrite, sizeof(float));
+  }
+}
+
+void receiveInfoFromFather(Data *data, int * info1, float * info2, bool which) {
+  int retRead;
+  if (which)
+  {
+    retRead = read(data->pipeFathertoMe, info1, sizeof(int));
+    assert_readPipeAnonymous(retRead, sizeof(int));
+  }
+  else
+  {
+    retRead = read(data->pipeFathertoMe, info2, sizeof(float));
+    assert_readPipeAnonymous(retRead, sizeof(float));
+  }
+}
+
+void receiveInfoFromLeftSon(Data *data, int * info1, float * info2, bool which) {
+  int retRead;
+  if (which)
+  {
+    retRead = read(data->pipeLeftSontoMe, info1, sizeof(int));
+    assert_readPipeAnonymous(retRead, sizeof(int));
+  }
+  else
+  {
+    retRead = read(data->pipeLeftSontoMe, info2, sizeof(float));
+    assert_readPipeAnonymous(retRead, sizeof(float));
+  }
+}
+
+void receiveInfoFromRightSon(Data *data, int * info1, float * info2, bool which) {
+  int retRead;
+  if (which)
+  {
+    retRead = read(data->pipeRightSontoMe, info1, sizeof(int));
+    assert_readPipeAnonymous(retRead, sizeof(int));
+  }
+  else
+  {
+    retRead = read(data->pipeRightSontoMe, info2, sizeof(float));
+    assert_readPipeAnonymous(retRead, sizeof(float));
+  }
+}
 
 /************************************************************************
  * Programme principal

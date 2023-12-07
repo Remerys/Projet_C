@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <fcntl.h>
 
 /* Fichier contenant les asserts de vérifications nécessaire au projet */
 
@@ -58,5 +59,7 @@ void assert_semop(int ret);
 
 //génération de clés uniques
 void assert_ftok(int cle);
+
+void assert_fork(pid_t ret);
 
 #endif

@@ -5,6 +5,6 @@ static void enterSC(int semId);
 static void exitSC(int semId);
 static int myOpen(const char * pipeId, int parameter);
 static void myClose(int pipeId);
-static void enterWaiting(int semaphoreId);
+static void exitWaiting(int semaphoreId);
 
 #endif
