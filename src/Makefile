@@ -60,17 +60,17 @@ srcdir  = .
 #########################################################
 
 BIN1 = client
-SRC1 = client.c client_master.c myassert.c utils.c
+SRC1 = client.c client_master.c myassert.c utils.c bettermyassert.c
 OBJ1 = $(subst .c,.o,$(SRC1))
 DFILES1 = $(subst .c,.d,$(SRC1))
 
 BIN2 = master
-SRC2 = master.c client_master.c master_worker.c myassert.c utils.c
+SRC2 = master.c client_master.c master_worker.c myassert.c utils.c bettermyassert.c
 OBJ2 = $(subst .c,.o,$(SRC2))
 DFILES2 = $(subst .c,.d,$(SRC2))
 
 BIN3 = worker
-SRC3 = worker.c master_worker.c myassert.c utils.c
+SRC3 = worker.c master_worker.c myassert.c utils.c bettermyassert.c
 OBJ3 = $(subst .c,.o,$(SRC3))
 DFILES3 = $(subst .c,.d,$(SRC3))
 

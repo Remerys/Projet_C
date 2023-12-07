@@ -34,6 +34,16 @@
 // . structures de données
 // . création/libération/initialisation de ressources (sémaphores, tubes, ...)
 // . communications
+
+
+// Fichier choisi pour l'identification du sémaphore
+#define MY_FILE "client_master.h"
+
+// Identifiant pour le deuxième paramètre de ftok
+#define PROJ_ID1 1
+#define PROJ_ID2 2
+
+
 //END TODO
 
 #endif

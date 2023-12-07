@@ -16,21 +16,26 @@
 
 #include "client_master.h"
 
+// Include à nous
+#include <assert.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include "bettermyassert.h"
+#include <fcntl.h>
 
 /************************************************************************
  * chaines possibles pour le premier paramètre de la ligne de commande
  ************************************************************************/
-#define TK_STOP        "stop"             // arrêter le master
-#define TK_HOW_MANY    "howmany"          // combien d'éléments dans l'ensemble
-#define TK_MINIMUM     "min"              // valeur minimale de l'ensemble
-#define TK_MAXIMUM     "max"              // valeur maximale de l'ensemble
-#define TK_EXIST       "exist"            // test d'existence d'un élément, et nombre d'exemplaires
-#define TK_SUM         "sum"              // somme de tous les éléments
-#define TK_INSERT      "insert"           // insertion d'un élément
-#define TK_INSERT_MANY "insertmany"       // insertions de plusieurs éléments aléatoires
-#define TK_PRINT       "print"            // debug : demande aux master/workers d'afficher les éléments
-#define TK_LOCAL       "local"            // lancer un calcul local (sans master) en multi-thread
-
+#define TK_STOP "stop"              // arrêter le master
+#define TK_HOW_MANY "howmany"       // combien d'éléments dans l'ensemble
+#define TK_MINIMUM "min"            // valeur minimale de l'ensemble
+#define TK_MAXIMUM "max"            // valeur maximale de l'ensemble
+#define TK_EXIST "exist"            // test d'existence d'un élément, et nombre d'exemplaires
+#define TK_SUM "sum"                // somme de tous les éléments
+#define TK_INSERT "insert"          // insertion d'un élément
+#define TK_INSERT_MANY "insertmany" // insertions de plusieurs éléments aléatoires
+#define TK_PRINT "print"            // debug : demande aux master/workers d'afficher les éléments
+#define TK_LOCAL "local"            // lancer un calcul local (sans master) en multi-thread
 
 /************************************************************************
  * structure stockant les paramètres du client
@@ -38,9 +43,12 @@
  * - les infos pour effectuer le travail (cf. ligne de commande)
  *   (note : une union permettrait d'optimiser la place mémoire)
  ************************************************************************/
-typedef struct {
+typedef struct
+{
     // communication avec le master
-    //TODO
+    // TODO
+    int pipe_client_to_master;
+    int pipe_master_to_client;
     // infos pour le travail à faire (récupérées sur la ligne de commande)
     int order;     // ordre de l'utilisateur (cf. CM_ORDER_* dans client_master.h)
     float elt;     // pour CM_ORDER_EXIST, CM_ORDER_INSERT, CM_ORDER_LOCAL
@@ -49,7 +57,6 @@ typedef struct {
     float max;     // pour CM_ORDER_INSERT_MANY, CM_ORDER_LOCAL
     int nbThreads; // pour CM_ORDER_LOCAL
 } Data;
-
 
 /************************************************************************
  * Usage
@@ -85,11 +92,10 @@ static void usage(const char *exeName, const char *message)
     exit(EXIT_FAILURE);
 }
 
-
 /************************************************************************
  * Analyse des arguments passés en ligne de commande
  ************************************************************************/
-static void parseArgs(int argc, char * argv[], Data *data)
+static void parseArgs(int argc, char *argv[], Data *data)
 {
     data->order = CM_ORDER_NONE;
 
@@ -177,30 +183,85 @@ static void parseArgs(int argc, char * argv[], Data *data)
     }
 }
 
-
 /************************************************************************
  * Partie multi-thread
  ************************************************************************/
-//TODO Une structure pour les arguments à passer à un thread (aucune variable globale autorisée)
+// TODO Une structure pour les arguments à passer à un thread (aucune variable globale autorisée)
+typedef struct
+{
+    int * result;
+    pthread_mutex_t * mutex;
+    float elt;
+    int min;
+    int max;
+    float * tab;
+    
+} ThreadData;
 
-//TODO
-// Code commun à tous les threads
-// Un thread s'occupe d'une portion du tableau et compte en interne le nombre de fois
-// où l'élément recherché est présent dans cette portion. On ajoute alors,
-// en section critique, ce nombre au compteur partagé par tous les threads.
-// Le compteur partagé est la variable "result" de "lauchThreads".
-// A vous de voir les paramètres nécessaires  (aucune variable globale autorisée)
-//END TODO
+// TODO
+//  Code commun à tous les threads
+//  Un thread s'occupe d'une portion du tableau et compte en interne le nombre de fois
+//  où l'élément recherché est présent dans cette portion. On ajoute alors,
+//  en section critique, ce nombre au compteur partagé par tous les threads.
+//  Le compteur partagé est la variable "result" de "lauchThreads".
+//  A vous de voir les paramètres nécessaires  (aucune variable globale autorisée)
+
+void * codeThread(void * arg) {
+    ThreadData *data = (ThreadData *) arg;
+
+    for (int i = data->min; i < data->max; i++) {
+        if (data->tab[i] == data->elt) {
+            pthread_mutex_lock(data->mutex);
+            (*(data->result))++;
+            pthread_mutex_unlock(data->mutex);
+        }
+    }
+
+    return NULL;
+}
+// END TODO
 
 void lauchThreads(const Data *data)
 {
-    //TODO déclarations nécessaires : mutex, ...
+    // TODO déclarations nécessaires : mutex, ...
     int result = 0;
-    float * tab = ut_generateTab(data->nb, data->min, data->max, 0);
+    float *tab = ut_generateTab(data->nb, data->min, data->max, 0);
+    pthread_t threadId[data->nbThreads];
+    int createThread, waitThread;
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    ThreadData datas[data->nbThreads];
 
-    //TODO lancement des threads
+    int step = data->nb / data->nbThreads;
+    int stepBis;
 
-    //TODO attente de la fin des threads
+    if (data->nb % data->nbThreads != 0) {
+        stepBis = data->nb % data->nbThreads;
+    }
+
+    for (int i = 0; i < data->nbThreads; i++) {
+        datas[i].result = &result;
+        datas[i].mutex = &mutex;
+        datas[i].tab = tab;
+        datas[i].elt = data->elt;
+        datas[i].min = step*i;
+        datas[i].max = step * i + step;
+        if (i == data->nbThreads-1 && stepBis != 0) {
+            datas[i].max = step * i + stepBis;
+        }
+        
+    }
+
+    // TODO lancement des threads
+    for (int i = 0; i < data->nbThreads; i++) {
+        createThread = pthread_create(&(threadId[i]), NULL, codeThread, &(datas[i]));
+        assert(createThread == 0); // a refaire
+    }    
+
+    // TODO attente de la fin des threads
+    for (int i = 0; i < data->nbThreads; i++) {
+        waitThread = pthread_join(threadId[i], NULL);
+        assert(waitThread == 0); // a refaire
+    }
 
     // résultat (result a été rempli par les threads)
     // affichage du tableau si pas trop gros
@@ -220,7 +281,7 @@ void lauchThreads(const Data *data)
     for (int i = 0; i < data->nb; i++)
     {
         if (tab[i] == data->elt)
-            nbVerif ++;
+            nbVerif++;
     }
     printf("Elément %g présent %d fois (%d attendu)\n", data->elt, result, nbVerif);
     if (result == nbVerif)
@@ -228,9 +289,11 @@ void lauchThreads(const Data *data)
     else
         printf("=> PB ! le résultat calculé par les threads est incorrect\n");
 
-    //TODO libération des ressources    
-}
+    // TODO libération des ressources
+    int retDestroy = pthread_mutex_destroy(&mutex);
+    assert(retDestroy == 0);
 
+}
 
 /************************************************************************
  * Partie communication avec le master
@@ -238,33 +301,165 @@ void lauchThreads(const Data *data)
 // envoi des données au master
 void sendData(const Data *data)
 {
-    myassert(data != NULL, "pb !");   //TODO à enlever (présent pour éviter le warning)
-
-    //TODO
-    // - envoi de l'ordre au master (cf. CM_ORDER_* dans client_master.h)
-    // - envoi des paramètres supplémentaires au master (pour CM_ORDER_EXIST,
-    //   CM_ORDER_INSERT et CM_ORDER_INSERT_MANY)
-    //END TODO
+    myassert(data != NULL, "pb !"); // TODO à enlever (présent pour éviter le warning)
+    int retWrite;
+    // TODO
+    //  - envoi de l'ordre au master (cf. CM_ORDER_* dans client_master.h)
+    retWrite = write(data->pipe_client_to_master, &(data->order), sizeof(int));
+    assert_writePipeNomme(retWrite, 1, sizeof(int));
+    int taille = 1;
+    if (data->order == CM_ORDER_INSERT_MANY) {
+        taille = data->nb;
+    }
+    float tabValue[taille];
+    float randomValue;
+    //  - envoi des paramètres supplémentaires au master (pour CM_ORDER_EXIST, CM_ORDER_INSERT et CM_ORDER_INSERT_MANY)
+    switch (data->order) {
+        case CM_ORDER_EXIST :
+            retWrite = write(data->pipe_client_to_master, &(data->elt), sizeof(float));
+            assert_writePipeNomme(retWrite, 1, sizeof(float));
+            break;
+        case CM_ORDER_INSERT :
+            retWrite = write(data->pipe_client_to_master, &(data->elt), sizeof(float));
+            assert_writePipeNomme(retWrite, 1, sizeof(float));
+            break;
+        case CM_ORDER_INSERT_MANY :
+            randomValue = 0;
+            retWrite = write(data->pipe_client_to_master, &(data->nb), sizeof(int));
+            assert_writePipeNomme(retWrite, 1, sizeof(int));
+            for (int i = 0 ; i < data->nb ; i++) {
+                randomValue = ((float)rand() / (float)(RAND_MAX)) * (data->max - data->min) + data->min;
+                tabValue[i] = randomValue;
+            }
+            retWrite = write(data->pipe_client_to_master, &tabValue, data->nb * sizeof(float));
+            assert_writePipeNomme(retWrite, data->nb, sizeof(float));
+            break;
+        default :
+            break;
+    }
+    
+    // END TODO
 }
 
 // attente de la réponse du master
 void receiveAnswer(const Data *data)
 {
-    myassert(data != NULL, "pb !");   //TODO à enlever (présent pour éviter le warning)
+    myassert(data != NULL, "pb !"); // TODO à enlever (présent pour éviter le warning)
+    int retRead;
+    int answer;
+    float max;
+    float min;
+    float sum;
+    int howMany;
+    int howManyDist;
+    int answerExist;
 
-    //TODO
-    // - récupération de l'accusé de réception du master (cf. CM_ANSWER_* dans client_master.h)
-    // - selon l'ordre et l'accusé de réception :
-    //      . récupération de données supplémentaires du master si nécessaire
-    // - affichage du résultat
-    //END TODO
+    // TODO
+    //  - récupération de l'accusé de réception du master (cf. CM_ANSWER_* dans client_master.h)
+    retRead = read(data->pipe_master_to_client, &answer, sizeof(int));
+    assert_readPipeNomme(retRead, 1, sizeof(int));
+
+    //  - selon l'ordre et l'accusé de réception :
+    //       . récupération de données supplémentaires du master si nécessaire
+    switch (answer) {
+        case CM_ANSWER_MAXIMUM_OK:
+            retRead = read(data->pipe_master_to_client, &max, sizeof(float));
+            assert_readPipeNomme(retRead, 1, sizeof(float));
+            printf("[client] ordre : maximum\n");
+            printf("[client] res : %f\n", max);
+            break;
+        case CM_ANSWER_MINIMUM_OK:
+            retRead = read(data->pipe_master_to_client, &min, sizeof(float));
+            assert_readPipeNomme(retRead, 1, sizeof(float));
+            printf("[client] ordre : minimum\n");
+            printf("[client] res : %f\n", min);
+            break;
+        case CM_ANSWER_SUM_OK:
+            retRead = read(data->pipe_master_to_client, &sum, sizeof(float));
+            assert_readPipeNomme(retRead, 1, sizeof(float));
+            printf("[client] ordre : sum\n");
+            printf("[client] res sum : %f\n", sum);
+            break;
+        case CM_ANSWER_HOW_MANY_OK:
+            retRead = read(data->pipe_master_to_client, &howMany, sizeof(int));
+            assert_readPipeNomme(retRead, 1, sizeof(int));
+            printf("[client] ordre : howmany\n");
+            printf("[client] res : %d\n", howMany);
+            retRead = read(data->pipe_master_to_client, &howManyDist, sizeof(int));
+            assert_readPipeNomme(retRead, 1, sizeof(int));
+            printf("[client] res sumDist : %d\n", howManyDist);
+            break;
+        case CM_ANSWER_EXIST_YES:
+            retRead = read(data->pipe_master_to_client, &answerExist, sizeof(int));
+            assert_readPipeNomme(retRead, 1, sizeof(int));
+            printf("[client] ordre : exist\n");
+            printf("[client] res : %d\n", answerExist);
+            break;
+        default:
+            break;
+    }
+    //  - affichage du résultat
+    // END TODO
 }
 
+// Récupération du sémaphore
+static int my_semget(int keyNumber)
+{
+    key_t key;
+    int semId;
+
+    key = ftok(MY_FILE, keyNumber);
+    assert_ftok(key);
+
+    semId = semget(key, 1, 0);
+    assert_semget(semId);
+
+    return semId;
+}
+
+static void enterSC(int semId)
+{
+    struct sembuf operation = {0, -1, 0};
+    int retSemop = semop(semId, &operation, 1);
+    assert_semop(retSemop);
+}
+
+static void exitSC(int semId)
+{
+    struct sembuf operation = {0, +1, 0};
+    int retSemop = semop(semId, &operation, 1);
+    assert_semop(retSemop);
+}
+
+static int myOpen(const char *pipeId, int parameter)
+{
+    int retOpen;
+
+    retOpen = open(pipeId, parameter);
+    assert_openPipe(retOpen);
+
+    return retOpen;
+}
+
+static void myClose(int pipeId)
+{
+    int retClose;
+
+    retClose = close(pipeId);
+    assert_closePipe(retClose);
+}
+
+static void exitWaiting(int semaphoreId)
+{
+    struct sembuf operation = {0, +1, 0};
+    int retSemop = semop(semaphoreId, &operation, 1);
+    assert_semop(retSemop);
+}
 
 /************************************************************************
  * Fonction principale
  ************************************************************************/
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     Data data;
     parseArgs(argc, argv, &data);
@@ -273,29 +468,38 @@ int main(int argc, char * argv[])
         lauchThreads(&data);
     else
     {
-        //TODO
-        // - entrer en section critique :
-        //       . pour empêcher que 2 clients communiquent simultanément
-        //       . le mutex est déjà créé par le master
+        int mainSemaphore, waitSemaphore;
+        // get semaphore
+        mainSemaphore = my_semget(PROJ_ID1);
+        waitSemaphore = my_semget(PROJ_ID2);
+        // TODO
+        //  - entrer en section critique :
+        //        . pour empêcher que 2 clients communiquent simultanément
+        //        . le mutex est déjà créé par le master
+        enterSC(mainSemaphore);
         // - ouvrir les tubes nommés (ils sont déjà créés par le master)
         //       . les ouvertures sont bloquantes, il faut s'assurer que
         //         le master ouvre les tubes dans le même ordre
-        //END TODO
+        data.pipe_client_to_master = myOpen("pipe_client_to_master", O_WRONLY);
+        data.pipe_master_to_client = myOpen("pipe_master_to_client", O_RDONLY);
+        // END TODO
 
         sendData(&data);
         receiveAnswer(&data);
 
-        //TODO
-        // - sortir de la section critique
+        // TODO
+        //  - sortir de la section critique
+        exitSC(mainSemaphore);
         // - libérer les ressources (fermeture des tubes, ...)
+        myClose(data.pipe_client_to_master);
+        myClose(data.pipe_master_to_client);
         // - débloquer le master grâce à un second sémaphore (cf. ci-dessous)
-        //
         // Une fois que le master a envoyé la réponse au client, il se bloque
         // sur un sémaphore ; le dernier point permet donc au master de continuer
-        //
+        exitWaiting(waitSemaphore);
         // N'hésitez pas à faire des fonctions annexes ; si la fonction main
         // ne dépassait pas une trentaine de lignes, ce serait bien.
     }
-    
+
     return EXIT_SUCCESS;
 }

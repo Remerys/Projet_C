@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "ipc.h": "c",
+        "sem.h": "c",
+        "types.h": "c",
+        "assert.h": "c",
+        "random": "c",
+        "limits": "c"
+    }
+}
